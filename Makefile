@@ -9,3 +9,4 @@ gen10by10:
 clean:
 	rm -f matrixgen
 	rm -f data_*
+	clear
