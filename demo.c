@@ -11,24 +11,10 @@ int **B;
 int **C;
 int n;
 
-Block *block_partition;
+pthread_t *threadList;
+Block *blocks;
 
-/*******************************************************************
- * compute_P_from_N
- *
- * Description:
- * Compute the number of equal sized blocks/partitions, K, from the a variable maatrix size, N
- * Which can be used to calculate the number of threads, P, which would be k * k = P;
- *
- * Parameters:
- * n - matrix size
- *
- * Returns:
- * k - Number of equal sized blocks/partitions of N
- *
- * Side Effects:
- * None.
- *******************************************************************/
+// Need to come up with a better name for "number_of_blocks" since this function returns ---> the k value where k * k == n ;
 int compute_number_of_blocks_from_N(int n)
 {
     // Limiting the max size of matrix C to sqrt(N)
@@ -55,13 +41,13 @@ void multiplyMatrix(Block *block_partition)
     {
         for (int j = block_partition->start_col; j < last_column_pos; j++) // Lock Col for C
         {
-            C[i][j] = 0;
+            block_partition->C[i][j] = 0;
 
             for (int k = 0; k < block_partition->n; k++)
             {
                 // Since both matrices are n x n -> K == n.
                 // Therefore we can traverse a whole column top to bottom and a whole row left to right from Matrices B and A respectively.
-                C[i][j] += A[i][k] * B[k][j];
+                block_partition->C[i][j] += block_partition->A[i][k] * block_partition->B[k][j];
             }
         }
     }
@@ -74,11 +60,62 @@ void *threadfunc(void *arg_p)
     return NULL;
 }
 
+void createThreads(int number_of_blocks)
+{
+    int num_threads = number_of_blocks * number_of_blocks;
+
+    threadList = malloc(num_threads * sizeof(pthread_t));
+    blocks = malloc(num_threads * sizeof(Block));
+
+    int block_height = n / number_of_blocks;
+    int block_width = n / number_of_blocks;
+
+    for (int thread_count = 0; thread_count < num_threads; thread_count++)
+    {
+        int block_row = thread_count / number_of_blocks;
+        int block_col = thread_count % number_of_blocks;
+
+        blocks[thread_count].n = n;
+        blocks[thread_count].A = A;
+        blocks[thread_count].B = B;
+        blocks[thread_count].C = C;
+
+        blocks[thread_count].height = block_height;
+        blocks[thread_count].width = block_width;
+
+        blocks[thread_count].start_col = block_col * block_width;
+        blocks[thread_count].start_row = block_row * block_height;
+
+        pthread_create(&threadList[thread_count], NULL, threadfunc, &blocks[thread_count]);
+    }
+}
+
+void joinThreads(int number_of_blocks)
+{
+    int num_threads = number_of_blocks * number_of_blocks;
+    for (int thread_count = 0; thread_count < num_threads; thread_count++)
+    {
+        pthread_join(threadList[thread_count], NULL);
+    }
+    return;
+}
+
+void deallocateMem()
+{
+    for (int i = 0; i < n; i++)
+    {
+        free(C[i]);
+    }
+    free(C);
+
+    free(threadList);
+    free(blocks);
+
+    return;
+}
+
 int main(int argc, char *argv[])
 {
-
-    block_partition = malloc(sizeof(Block));
-
     double start_time = 0;
     double end_time = 0;
 
@@ -95,16 +132,11 @@ int main(int argc, char *argv[])
         C[i] = malloc(n * sizeof(int));
     }
 
-    // int number_of_blocks = compute_number_of_blocks_from_N(n);
+    int number_of_blocks = compute_number_of_blocks_from_N(n);
 
-    block_partition->n = n;
-    block_partition->height = n;
-    block_partition->width = n;
-    block_partition->start_col = 0;
-    block_partition->start_row = 0;
-    block_partition->thread_id = 0;
+    createThreads(number_of_blocks);
 
-    multiplyMatrix(block_partition);
+    joinThreads(number_of_blocks);
 
     // End Timer
     GET_TIME(end_time);
@@ -112,12 +144,7 @@ int main(int argc, char *argv[])
     // Save new Matrix
     Lab1_saveoutput(C, &n, end_time - start_time);
 
-    for (int i = 0; i < n; i++)
-    {
-        free(C[i]);
-    }
-    free(C);
-    free(block_partition);
+    deallocateMem();
 
     return 0;
 }

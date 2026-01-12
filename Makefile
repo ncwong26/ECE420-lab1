@@ -1,4 +1,4 @@
-all: clean gen10by10 
+all: clean runDemo 
 
 matrixgen:
 	gcc matrixgen.c -o matrixgen
