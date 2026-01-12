@@ -1,12 +1,24 @@
-all: clean matrixgen gen10by10 
+all: clean gen10by10 
 
 matrixgen:
 	gcc matrixgen.c -o matrixgen
 
-gen10by10:
+gen10by10: cleanMatrixgen matrixgen
 	./matrixgen -s 10 -b 10 -p
 
-clean:
-	rm -f matrixgen
-	rm -f data_*
+runDemo: demo
+	./demo
+
+demo: gen10by10 cleanDemo
+	gcc -g -Wall demo.c lab1_IO.c -o demo -lpthread
+
+cleanDemo:
+	rm -rf demo
+
+cleanMatrixgen:
+	rm -rf matrixgen
+	rm -rf data_*
+
+clean: cleanDemo cleanMatrixgen
+	rm -rf *.dSYM
 	clear
