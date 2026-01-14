@@ -1,6 +1,7 @@
 #include "lab1_IO.h"
 #include "timer.h"
 #include "demo.h"
+#include <stdio.h>
 #include <pthread.h>
 #include <math.h>
 #include <stdlib.h>
@@ -13,23 +14,6 @@ int n;
 
 pthread_t *threadList;
 Block *blocks;
-
-// Need to come up with a better name for "number_of_blocks" since this function returns ---> the k value where k * k == n ;
-int compute_number_of_blocks_from_N(int n)
-{
-    // Limiting the max size of matrix C to sqrt(N)
-    int k = (int)sqrt(n);
-
-    // Find a value of k that breaks N into equal parts
-    while (k > 1)
-    {
-        if (n % k == 0)
-            break;
-
-        k--;
-    }
-    return k;
-}
 
 void multiplyMatrix(Block *block_partition)
 {
@@ -86,7 +70,12 @@ void createThreads(int number_of_blocks)
         blocks[thread_count].start_col = block_col * block_width;
         blocks[thread_count].start_row = block_row * block_height;
 
-        pthread_create(&threadList[thread_count], NULL, threadfunc, &blocks[thread_count]);
+        int rc = pthread_create(&threadList[thread_count], NULL, threadfunc, &blocks[thread_count]);
+        if (rc != 0)
+        {
+            fprintf(stderr, "pthread_create failed (thread %d): %d\n", thread_count, rc);
+            exit(EXIT_FAILURE);
+        }
     }
 }
 
@@ -119,11 +108,40 @@ int main(int argc, char *argv[])
     double start_time = 0;
     double end_time = 0;
 
+    if (argc != 2)
+    {
+        fprintf(stderr, "Usage: %s <p>   (p must be a perfect square)\n", argv[0]);
+        return 1;
+    }
+
+    int p = atoi(argv[1]);
+    if (p <= 0)
+    {
+        fprintf(stderr, "Invalid p: %d\n", p);
+        return 1;
+    }
+
+    int q = (int)sqrt((double)p);
+    if (q * q != p)
+    {
+        fprintf(stderr, "p must be a perfect square (p=%d)\n", p);
+        return 1;
+    }
+
     // Load Matrix
     Lab1_loadinput(&A, &B, &n);
 
-    // Start Timer
-    GET_TIME(start_time);
+    if (n <= 0)
+    {
+        fprintf(stderr, "Invalid matrix size n: %d\n", n);
+        return 1;
+    }
+
+    if (n % q != 0)
+    {
+        fprintf(stderr, "n (%d) must be divisible by q (%d)\n", n, q);
+        return 1;
+    }
 
     // Perform Matrix Multiplication
     C = malloc(n * sizeof(int *));
@@ -131,11 +149,11 @@ int main(int argc, char *argv[])
     {
         C[i] = malloc(n * sizeof(int));
     }
+    int number_of_blocks = q;
 
-    int number_of_blocks = compute_number_of_blocks_from_N(n);
-
+    /* Start timing only for the threaded computation (exclude allocation / I/O) */
+    GET_TIME(start_time);
     createThreads(number_of_blocks);
-
     joinThreads(number_of_blocks);
 
     // End Timer
